@@ -328,13 +328,13 @@ tr_introsort(saidx_t *ISA, const saidx_t *ISAd,
              saidx_t *SA, saidx_t *first, saidx_t *last,
              trbudget_t *budget) {
 #define STACK_SIZE TR_STACKSIZE
-  struct { const saidx_t *a; saidx_t *b, *c; saint_t d, e; }stack[STACK_SIZE];
+  struct { const saidx_t *a; saidx_t *b, *c; saint_t d; }stack[STACK_SIZE];
   saidx_t *a, *b, *c;
   saidx_t t;
   saidx_t v, x = 0;
   saidx_t incr = ISAd - ISA;
   saint_t limit, next;
-  saint_t ssize, trlink = -1;
+  saint_t ssize, partial_copy_flag = 0;
 
   for(ssize = 0, limit = tr_ilg(last - first);;) {
 
@@ -353,39 +353,39 @@ tr_introsort(saidx_t *ISA, const saidx_t *ISAd,
 
         /* push */
         if(1 < (b - a)) {
-          STACK_PUSH5(NULL, a, b, 0, 0);
-          STACK_PUSH5(ISAd - incr, first, last, -2, trlink);
-          trlink = ssize - 2;
+          STACK_PUSH(NULL, a, b, partial_copy_flag);
+          STACK_PUSH(ISAd - incr, first, last, -2);
+          partial_copy_flag = 0;
         }
         if((a - first) <= (last - b)) {
           if(1 < (a - first)) {
-            STACK_PUSH5(ISAd, b, last, tr_ilg(last - b), trlink);
+            STACK_PUSH(ISAd, b, last, tr_ilg(last - b));
             last = a, limit = tr_ilg(a - first);
           } else if(1 < (last - b)) {
             first = b, limit = tr_ilg(last - b);
           } else {
-            STACK_POP5(ISAd, first, last, limit, trlink);
+            STACK_POP(ISAd, first, last, limit);
           }
         } else {
           if(1 < (last - b)) {
-            STACK_PUSH5(ISAd, first, a, tr_ilg(a - first), trlink);
+            STACK_PUSH(ISAd, first, a, tr_ilg(a - first));
             first = b, limit = tr_ilg(last - b);
           } else if(1 < (a - first)) {
             last = a, limit = tr_ilg(a - first);
           } else {
-            STACK_POP5(ISAd, first, last, limit, trlink);
+            STACK_POP(ISAd, first, last, limit);
           }
         }
       } else if(limit == -2) {
         /* tandem repeat copy */
         a = stack[--ssize].b, b = stack[ssize].c;
-        if(stack[ssize].d == 0) {
+        if(partial_copy_flag == 0) {
+          partial_copy_flag = stack[ssize].d;
           tr_copy(ISA, SA, first, a, b, last, ISAd - ISA);
         } else {
-          if(0 <= trlink) { stack[trlink].d = -1; }
           tr_partialcopy(ISA, SA, first, a, b, last, ISAd - ISA);
         }
-        STACK_POP5(ISAd, first, last, limit, trlink);
+        STACK_POP(ISAd, first, last, limit);
       } else {
         /* sorted partition */
         if(0 <= *first) {
@@ -401,26 +401,26 @@ tr_introsort(saidx_t *ISA, const saidx_t *ISAd,
           /* push */
           if(trbudget_check(budget, a - first)) {
             if((a - first) <= (last - a)) {
-              STACK_PUSH5(ISAd, a, last, -3, trlink);
+              STACK_PUSH(ISAd, a, last, -3);
               ISAd += incr, last = a, limit = next;
             } else {
               if(1 < (last - a)) {
-                STACK_PUSH5(ISAd + incr, first, a, next, trlink);
+                STACK_PUSH(ISAd + incr, first, a, next);
                 first = a, limit = -3;
               } else {
                 ISAd += incr, last = a, limit = next;
               }
             }
           } else {
-            if(0 <= trlink) { stack[trlink].d = -1; }
+            partial_copy_flag = 1;
             if(1 < (last - a)) {
               first = a, limit = -3;
             } else {
-              STACK_POP5(ISAd, first, last, limit, trlink);
+              STACK_POP(ISAd, first, last, limit);
             }
           }
         } else {
-          STACK_POP5(ISAd, first, last, limit, trlink);
+          STACK_POP(ISAd, first, last, limit);
         }
       }
       continue;
@@ -460,75 +460,75 @@ tr_introsort(saidx_t *ISA, const saidx_t *ISAd,
         if((a - first) <= (last - b)) {
           if((last - b) <= (b - a)) {
             if(1 < (a - first)) {
-              STACK_PUSH5(ISAd + incr, a, b, next, trlink);
-              STACK_PUSH5(ISAd, b, last, limit, trlink);
+              STACK_PUSH(ISAd + incr, a, b, next);
+              STACK_PUSH(ISAd, b, last, limit);
               last = a;
             } else if(1 < (last - b)) {
-              STACK_PUSH5(ISAd + incr, a, b, next, trlink);
+              STACK_PUSH(ISAd + incr, a, b, next);
               first = b;
             } else {
               ISAd += incr, first = a, last = b, limit = next;
             }
           } else if((a - first) <= (b - a)) {
             if(1 < (a - first)) {
-              STACK_PUSH5(ISAd, b, last, limit, trlink);
-              STACK_PUSH5(ISAd + incr, a, b, next, trlink);
+              STACK_PUSH(ISAd, b, last, limit);
+              STACK_PUSH(ISAd + incr, a, b, next);
               last = a;
             } else {
-              STACK_PUSH5(ISAd, b, last, limit, trlink);
+              STACK_PUSH(ISAd, b, last, limit);
               ISAd += incr, first = a, last = b, limit = next;
             }
           } else {
-            STACK_PUSH5(ISAd, b, last, limit, trlink);
-            STACK_PUSH5(ISAd, first, a, limit, trlink);
+            STACK_PUSH(ISAd, b, last, limit);
+            STACK_PUSH(ISAd, first, a, limit);
             ISAd += incr, first = a, last = b, limit = next;
           }
         } else {
           if((a - first) <= (b - a)) {
             if(1 < (last - b)) {
-              STACK_PUSH5(ISAd + incr, a, b, next, trlink);
-              STACK_PUSH5(ISAd, first, a, limit, trlink);
+              STACK_PUSH(ISAd + incr, a, b, next);
+              STACK_PUSH(ISAd, first, a, limit);
               first = b;
             } else if(1 < (a - first)) {
-              STACK_PUSH5(ISAd + incr, a, b, next, trlink);
+              STACK_PUSH(ISAd + incr, a, b, next);
               last = a;
             } else {
               ISAd += incr, first = a, last = b, limit = next;
             }
           } else if((last - b) <= (b - a)) {
             if(1 < (last - b)) {
-              STACK_PUSH5(ISAd, first, a, limit, trlink);
-              STACK_PUSH5(ISAd + incr, a, b, next, trlink);
+              STACK_PUSH(ISAd, first, a, limit);
+              STACK_PUSH(ISAd + incr, a, b, next);
               first = b;
             } else {
-              STACK_PUSH5(ISAd, first, a, limit, trlink);
+              STACK_PUSH(ISAd, first, a, limit);
               ISAd += incr, first = a, last = b, limit = next;
             }
           } else {
-            STACK_PUSH5(ISAd, first, a, limit, trlink);
-            STACK_PUSH5(ISAd, b, last, limit, trlink);
+            STACK_PUSH(ISAd, first, a, limit);
+            STACK_PUSH(ISAd, b, last, limit);
             ISAd += incr, first = a, last = b, limit = next;
           }
         }
       } else {
-        if((1 < (b - a)) && (0 <= trlink)) { stack[trlink].d = -1; }
+        if(1 < (b - a)) { partial_copy_flag = 1; }
         if((a - first) <= (last - b)) {
           if(1 < (a - first)) {
-            STACK_PUSH5(ISAd, b, last, limit, trlink);
+            STACK_PUSH(ISAd, b, last, limit);
             last = a;
           } else if(1 < (last - b)) {
             first = b;
           } else {
-            STACK_POP5(ISAd, first, last, limit, trlink);
+            STACK_POP(ISAd, first, last, limit);
           }
         } else {
           if(1 < (last - b)) {
-            STACK_PUSH5(ISAd, first, a, limit, trlink);
+            STACK_PUSH(ISAd, first, a, limit);
             first = b;
           } else if(1 < (a - first)) {
             last = a;
           } else {
-            STACK_POP5(ISAd, first, last, limit, trlink);
+            STACK_POP(ISAd, first, last, limit);
           }
         }
       }
@@ -536,8 +536,8 @@ tr_introsort(saidx_t *ISA, const saidx_t *ISAd,
       if(trbudget_check(budget, last - first)) {
         limit = tr_ilg(last - first), ISAd += incr;
       } else {
-        if(0 <= trlink) { stack[trlink].d = -1; }
-        STACK_POP5(ISAd, first, last, limit, trlink);
+        partial_copy_flag = 1;
+        STACK_POP(ISAd, first, last, limit);
       }
     }
   }
